@@ -521,7 +521,18 @@ function setFile(f) {
   hideError(); hideResult(); hideProgress();
 }
 
-async function startJob() {
+function formatSpeed(bytesPerSec) {
+  if (bytesPerSec > 1024*1024) return (bytesPerSec/1024/1024).toFixed(1) + ' МБ/с';
+  if (bytesPerSec > 1024) return (bytesPerSec/1024).toFixed(0) + ' КБ/с';
+  return Math.round(bytesPerSec) + ' Б/с';
+}
+function formatTime(sec) {
+  if (!isFinite(sec) || sec <= 0) return '';
+  if (sec < 60) return '~' + Math.ceil(sec) + 'с';
+  return '~' + Math.ceil(sec/60) + 'мин';
+}
+
+function startJob() {
   const f = $('fileInput')._file;
   if (!f) return;
 
@@ -534,18 +545,53 @@ async function startJob() {
   fd.append('fps',     $('fps').value);
   fd.append('res',     $('res').value);
 
-  showProgress('Загрузка файла…', 1);
+  const xhr = new XMLHttpRequest();
+  let uploadStart = Date.now();
 
-  try {
-    const r   = await fetch('/upload', { method: 'POST', body: fd });
-    const data = await r.json();
-    if (!r.ok) { showError(data.error || 'Ошибка загрузки'); return; }
-    currentJobId = data.job_id;
-    pollStatus();
-  } catch(e) {
-    showError('Ошибка соединения: ' + e.message);
+  xhr.upload.addEventListener('loadstart', () => {
+    uploadStart = Date.now();
+    showProgress('Подготовка загрузки…', 0);
+  });
+
+  xhr.upload.addEventListener('progress', e => {
+    if (!e.lengthComputable) return;
+    const pct     = Math.round(e.loaded / e.total * 100);
+    const elapsed = (Date.now() - uploadStart) / 1000;
+    const speed   = elapsed > 0.5 ? e.loaded / elapsed : 0;
+    const eta     = speed > 0 ? (e.total - e.loaded) / speed : 0;
+    const loaded  = (e.loaded/1024/1024).toFixed(1);
+    const total   = (e.total /1024/1024).toFixed(1);
+    const speedStr = speed > 0 ? ' · ' + formatSpeed(speed) : '';
+    const etaStr   = eta   > 0 ? ' · ' + formatTime(eta)    : '';
+    showProgress('Загрузка ' + loaded + '/' + total + ' МБ' + speedStr + etaStr, pct);
+  });
+
+  xhr.upload.addEventListener('load', () => {
+    showProgress('Файл загружен, обработка…', 100);
+  });
+
+  xhr.addEventListener('load', () => {
+    try {
+      const data = JSON.parse(xhr.responseText);
+      if (xhr.status !== 200) {
+        showError(data.error || 'Ошибка загрузки');
+        $('runBtn').disabled = false; return;
+      }
+      currentJobId = data.job_id;
+      pollStatus();
+    } catch(e) {
+      showError('Ошибка ответа сервера');
+      $('runBtn').disabled = false;
+    }
+  });
+
+  xhr.addEventListener('error', () => {
+    showError('Ошибка соединения');
     $('runBtn').disabled = false;
-  }
+  });
+
+  xhr.open('POST', '/upload');
+  xhr.send(fd);
 }
 
 function pollStatus() {
