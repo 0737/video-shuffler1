@@ -153,10 +153,11 @@ def upload():
     if not f.filename:
         return jsonify(error="Пустое имя файла"), 400
 
-    ext  = Path(secure_filename(f.filename)).suffix.lower()
-    allowed = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".webm", ".m4v", ".flv"}
-    if ext not in allowed:
-        return jsonify(error=f"Формат {ext} не поддерживается"), 400
+    # Определяем расширение — если пустое или неизвестное, используем .mp4
+    raw_ext = Path(secure_filename(f.filename)).suffix.lower()
+    allowed = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".webm", ".m4v", ".flv",
+               ".3gp", ".ts", ".mts", ".m2ts", ".qt"}
+    ext = raw_ext if raw_ext in allowed else ".mp4"
 
     job_id   = uuid.uuid4().hex
     src_path = str(UPLOAD_DIR / f"{job_id}{ext}")
