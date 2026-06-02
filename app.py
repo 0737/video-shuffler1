@@ -88,7 +88,7 @@ def process_video(job_id, src, seg_len, fps, width, height):
             clip = str(tmpdir / f"clip_{idx:04d}.mp4")
             clip_paths.append(clip)
 
-            r = subprocess.run([
+        r = subprocess.run([
                 FFMPEG, "-y",
                 "-ss", str(t), "-i", src,
                 "-t", str(seg_len),
@@ -97,10 +97,10 @@ def process_video(job_id, src, seg_len, fps, width, height):
                         f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,"
                         f"fps={fps}"),
                 "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+                "-threads", "1",
                 "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
                 "-avoid_negative_ts", "1", clip
             ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-
             if r.returncode != 0:
                 raise RuntimeError(r.stderr.decode(errors="replace")[-400:])
 
